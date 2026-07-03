@@ -173,8 +173,8 @@ Endpoints disponibles:
 - Fabián Brenes Loría.
 - Johel Barquero Carvajal.
 
-**Profesor:** Osvaldo Gónzalez Chaves 
-**Curso:** Inteligencia Artificial 2026
+**Profesor:** Osvaldo Gónzalez Chaves  
+**Curso:** Inteligencia Artificial 2026  
 **Fecha de entrega:** 13 de julio de 2026
 
 ---
