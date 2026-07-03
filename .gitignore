@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.installed.cfg
+*.egg
+build/
+dist/
+
+# Entornos virtuales
+venv/
+env/
+ENV/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Datos crudos pesados (descargar bajo demanda)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Modelos entrenados grandes (subir a Releases o HuggingFace)
+models/*.h5
+models/*.keras
+models/*.pkl
+!models/.gitkeep
+
+# Logs
+logs/
+*.log
+runs/
+tensorboard_logs/
+
+# Variables de entorno
+.env
+.env.local
+
+# Caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Sistema
+Thumbs.db
+desktop.ini
