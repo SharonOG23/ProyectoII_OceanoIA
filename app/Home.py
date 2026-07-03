@@ -203,7 +203,8 @@ with tab4:
 
     st.markdown("---")
     st.markdown(
-        "**Equipo:** [tu equipo]  ·  **Profesor:** [docente]  ·  "
-        "**Curso:** Inteligencia Artificial 2026  ·  "
-        "**Entrega:** 18 de julio 2026"
+        "**Equipo:** Marco Álvarez Quirós · Sharon Obando Gómez · Fabián Brenes Loría · Johel Barquero Carvajal ·  "  
+        "**Profesor:** Osvaldo Gónzalez Chaves  ·  "  
+        "**Curso:** Inteligencia Artificial 2026  ·  "  
+        "**Entrega:** 13 de julio 2026"
     )
