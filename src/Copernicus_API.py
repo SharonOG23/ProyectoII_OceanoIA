@@ -60,25 +60,32 @@ print("Iniciando descarga de datos desde Copernicus...")
 
 print("-> Descargando datos físicos: temperatura superficial y altura del mar...")
 
-copernicusmarine.subset(
-    dataset_id="cmems_mod_glo_phy_anfc_0.083deg_PT1D-m",
-    variables=["thetao", "zos"],
-    start_datetime=FECHA_INICIO,
-    end_datetime=FECHA_FIN,
-    output_filename=str(ARCHIVO_FISICA_NC),
-    **COORDENADAS_CR,
-)
+try:
+    copernicusmarine.subset(
+        dataset_id="cmems_mod_glo_phy_anfc_0.083deg_PT1D-m",
+        variables=["thetao", "zos"],
+        start_datetime=FECHA_INICIO,
+        end_datetime=FECHA_FIN,
+        output_filename=str(ARCHIVO_FISICA_NC),
+        **COORDENADAS_CR,
+    )
+except Exception as e:
+    import traceback
+    traceback.print_exc()
 
 print("-> Descargando datos de viento...")
 
-copernicusmarine.subset(
-    dataset_id="cmems_obs-wind_glo_phy_my_l4_0.25deg_PT1D",
-    variables=["wind_speed"],
-    start_datetime=FECHA_INICIO,
-    end_datetime=FECHA_FIN,
-    output_filename=str(ARCHIVO_VIENTO_NC),
-    **COORDENADAS_CR,
-)
+try:
+    copernicusmarine.subset(
+        dataset_id="cmems_obs-wind_glo_phy_my_l4_0.25deg_PT1D",
+        variables=["wind_speed"],
+        start_datetime=FECHA_INICIO,
+        end_datetime=FECHA_FIN,
+        output_filename=str(ARCHIVO_VIENTO_NC),
+        **COORDENADAS_CR,
+    )
+except Exception as e:
+    print(f"Error descargando viendo: {e}")
 
 print("¡Descargas de archivos NetCDF finalizadas con éxito!")
 
