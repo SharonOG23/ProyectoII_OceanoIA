@@ -50,7 +50,7 @@ FECHA_INICIO = "2020-01-01T00:00:00"
 # Recomendación:
 # No uses una fecha futura si el dataset todavía no contiene datos hasta esa fecha.
 # Puedes ajustarla según la disponibilidad real del producto en Copernicus.
-FECHA_FIN = "2024-12-31T23:59:59"
+FECHA_FIN = "2026-07-5T23:59:59"
 
 # ---------------------------------------------------------------------------
 # PASO 1: DESCARGA DE DATOS DESDE COPERNICUS MARINE
