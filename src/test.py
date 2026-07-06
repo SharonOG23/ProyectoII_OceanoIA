@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 
+
 try:
     import copernicusmarine
 except ImportError as error:
@@ -105,18 +106,43 @@ except Exception:
     traceback.print_exc()
     sys.exit(1)
 
-if not ARCHIVO_DESCARGADO.exists():
-    # Respaldo: si el SDK guardó el archivo en otra ruta/nombre, usamos la que
-    # el propio resultado del subset() reporta.
-    ruta_reportada = getattr(resultado_descarga, "file_path", None) or getattr(
-        resultado_descarga, "output_file", None
+def _resolver_archivo_nc_descargado(ruta_esperada: Path, resultado) -> Path:
+    """
+    Distintas versiones de copernicusmarine se comportan distinto con
+    output_filename/output_directory: a veces crean el .nc directamente,
+    a veces crean una carpeta con ese nombre y el .nc real queda adentro.
+    Esta función normaliza ambos casos.
+    """
+    # Caso normal: ya es el archivo .nc esperado.
+    if ruta_esperada.is_file():
+        return ruta_esperada
+
+    # Caso "carpeta en vez de archivo": buscar el .nc dentro.
+    if ruta_esperada.is_dir():
+        candidatos = sorted(ruta_esperada.rglob("*.nc"))
+        if candidatos:
+            return candidatos[0]
+
+    # Respaldo: usar la ruta que el propio objeto de resultado reporta.
+    ruta_reportada = getattr(resultado, "file_path", None) or getattr(
+        resultado, "output_file", None
     )
-    if ruta_reportada and Path(ruta_reportada).exists():
-        ARCHIVO_DESCARGADO = Path(ruta_reportada)
-    else:
-        print(f"Error: no se encontró el archivo descargado en '{ARCHIVO_DESCARGADO}'.")
-        print(f"Resultado devuelto por copernicusmarine.subset(): {resultado_descarga}")
-        sys.exit(1)
+    if ruta_reportada:
+        ruta_reportada = Path(ruta_reportada)
+        if ruta_reportada.is_file():
+            return ruta_reportada
+        if ruta_reportada.is_dir():
+            candidatos = sorted(ruta_reportada.rglob("*.nc"))
+            if candidatos:
+                return candidatos[0]
+
+    print(f"Error: no se encontró ningún archivo .nc en '{ruta_esperada}'.")
+    print(f"Resultado devuelto por copernicusmarine.subset(): {resultado}")
+    sys.exit(1)
+
+
+ARCHIVO_DESCARGADO = _resolver_archivo_nc_descargado(ARCHIVO_DESCARGADO, resultado_descarga)
+print(f"Archivo NetCDF localizado en: {ARCHIVO_DESCARGADO}")
 
 print("¡Descarga del archivo NetCDF finalizada con éxito!")
 
