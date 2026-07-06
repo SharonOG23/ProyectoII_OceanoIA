@@ -1,5 +1,7 @@
-from pathlib import Path
+import os
 import sys
+from pathlib import Path
+
 
 try:
     import copernicusmarine
@@ -29,28 +31,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CARPETA_DATOS = BASE_DIR / "data" / "raw" / "RNN"
 CARPETA_DATOS.mkdir(parents=True, exist_ok=True)
 
-ARCHIVO_FISICA_NC = CARPETA_DATOS / "costa_rica_fisica.nc"
-ARCHIVO_VIENTO_NC = CARPETA_DATOS / "costa_rica_viento.nc"
-ARCHIVO_DATOS_CSV = CARPETA_DATOS / "Copernicus_data.csv"
-ARCHIVO_MAPA_HTML = BASE_DIR / "mapa_costa_rica.html"
+ARCHIVO_DESCARGADO = CARPETA_DATOS / "costa_rica.nc"
+ARCHIVO_DATOS_CSV = CARPETA_DATOS / "costa_rica.csv"
+ARCHIVO_MAPA_HTML = CARPETA_DATOS / "mapa_costa_rica.html"
 
 # ---------------------------------------------------------------------------
 # CONFIGURACIÓN DE PARÁMETROS
 # ---------------------------------------------------------------------------
 
 COORDENADAS_CR = {
-    "minimum_longitude": -86.0,
-    "maximum_longitude": -82.5,
-    "minimum_latitude": 8.0,
-    "maximum_latitude": 11.5,
+    "minimum_longitude": -86.50039881274324,
+    "maximum_longitude": -82.11922642494376,
+    "minimum_latitude": 7.5707039686301245,
+    "maximum_latitude": 11.269335816014534,
 }
 
-FECHA_INICIO = "2020-01-01T00:00:00"
+FECHA_INICIO = "2022-12-01T01:07:06"
 
 # Recomendación:
 # No uses una fecha futura si el dataset todavía no contiene datos hasta esa fecha.
-# Puedes ajustarla según la disponibilidad real del producto en Copernicus.
-FECHA_FIN = "2026-07-5T23:59:59"
+# Ajusta según la disponibilidad real del producto en Copernicus.
+FECHA_FIN = "2026-05-30T22:34:58"
 
 # ---------------------------------------------------------------------------
 # PASO 1: DESCARGA DE DATOS DESDE COPERNICUS MARINE
@@ -58,74 +59,119 @@ FECHA_FIN = "2026-07-5T23:59:59"
 
 print("Iniciando descarga de datos desde Copernicus...")
 
-# Esto guarda tus credenciales en el entorno de ejecución para que no se detenga a pedirlas
-copernicusmarine.login(username="fbrenes", password="4HQN6J58-i8ig")
+# IMPORTANTE: nunca escribas tu usuario/contraseña directamente en el código.
+# Defínelos como variables de entorno antes de ejecutar el script, por ejemplo en
+# la terminal:
+#   export COPERNICUSMARINE_SERVICE_USERNAME="tu_usuario"
+#   export COPERNICUSMARINE_SERVICE_PASSWORD="tu_password"
+# copernicusmarine detecta estas variables automáticamente y no es necesario
+# llamar a login() manualmente cada vez. Si prefieres hacerlo interactivo,
+# usa copernicusmarine.login() sin argumentos y te pedirá los datos una sola vez,
+# guardándolos de forma segura en tu configuración local.
 
-print("-> Descargando datos físicos: temperatura superficial y altura del mar...")
+usuario = os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME")
+password = os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD")
+
+if usuario and password:
+    copernicusmarine.login(username=usuario, password=password, force_overwrite=True)
+else:
+    # Si ya iniciaste sesión antes, copernicusmarine reutiliza las credenciales
+    # guardadas y no volverá a pedirlas.
+    print("No se encontraron credenciales en variables de entorno; "
+          "se usará la sesión guardada localmente (si existe).")
+
+print("-> Descargando datos de oleaje y viento...")
 
 try:
-    copernicusmarine.subset(
-        dataset_id="cmems_mod_glo_phy_anfc_0.083deg_P1D-m",
-        variables=["tob"],
+    resultado_descarga = copernicusmarine.subset(
+        dataset_id="cmems_obs-wave_glo_phy-swh_nrt_h2c-l3_PT1S",
+        dataset_version="202211",
+        variables=["VAVH", "VAVH_UNFILTERED", "WIND_SPEED"],
+        minimum_longitude=COORDENADAS_CR["minimum_longitude"],
+        maximum_longitude=COORDENADAS_CR["maximum_longitude"],
+        minimum_latitude=COORDENADAS_CR["minimum_latitude"],
+        maximum_latitude=COORDENADAS_CR["maximum_latitude"],
         start_datetime=FECHA_INICIO,
         end_datetime=FECHA_FIN,
-        output_filename=str(ARCHIVO_FISICA_NC),
-        **COORDENADAS_CR,
+        minimum_depth=0,
+        maximum_depth=0,
+        coordinates_selection_method="strict-inside",
+        output_directory=str(CARPETA_DATOS),
+        output_filename=ARCHIVO_DESCARGADO.name,
+        disable_progress_bar=True,
+        overwrite=True,
     )
-except Exception as e:
+except Exception:
     import traceback
     traceback.print_exc()
+    sys.exit(1)
 
-# print("-> Descargando datos de viento...")
-#
-# try:
-#     copernicusmarine.subset(
-#         dataset_id="cmems_obs-wind_glo_phy_my_l4_0.25deg_PT1D",
-#         variables=["wind_speed"],
-#         start_datetime=FECHA_INICIO,
-#         end_datetime=FECHA_FIN,
-#         output_filename=str(ARCHIVO_VIENTO_NC),
-#         **COORDENADAS_CR,
-#     )
-# except Exception as e:
-#     print(f"Error descargando viendo: {e}")
+def _resolver_archivo_nc_descargado(ruta_esperada: Path, resultado) -> Path:
+    """
+    Distintas versiones de copernicusmarine se comportan distinto con
+    output_filename/output_directory: a veces crean el .nc directamente,
+    a veces crean una carpeta con ese nombre y el .nc real queda adentro.
+    Esta función normaliza ambos casos.
+    """
+    # Caso normal: ya es el archivo .nc esperado.
+    if ruta_esperada.is_file():
+        return ruta_esperada
 
-print("¡Descargas de archivos NetCDF finalizadas con éxito!")
+    # Caso "carpeta en vez de archivo": buscar el .nc dentro.
+    if ruta_esperada.is_dir():
+        candidatos = sorted(ruta_esperada.rglob("*.nc"))
+        if candidatos:
+            return candidatos[0]
+
+    # Respaldo: usar la ruta que el propio objeto de resultado reporta.
+    ruta_reportada = getattr(resultado, "file_path", None) or getattr(
+        resultado, "output_file", None
+    )
+    if ruta_reportada:
+        ruta_reportada = Path(ruta_reportada)
+        if ruta_reportada.is_file():
+            return ruta_reportada
+        if ruta_reportada.is_dir():
+            candidatos = sorted(ruta_reportada.rglob("*.nc"))
+            if candidatos:
+                return candidatos[0]
+
+    print(f"Error: no se encontró ningún archivo .nc en '{ruta_esperada}'.")
+    print(f"Resultado devuelto por copernicusmarine.subset(): {resultado}")
+    sys.exit(1)
+
+
+ARCHIVO_DESCARGADO = _resolver_archivo_nc_descargado(ARCHIVO_DESCARGADO, resultado_descarga)
+print(f"Archivo NetCDF localizado en: {ARCHIVO_DESCARGADO}")
+
+print("¡Descarga del archivo NetCDF finalizada con éxito!")
 
 # ---------------------------------------------------------------------------
 # PASO 2: PROCESAMIENTO Y CONVERSIÓN A FORMATO CSV
 # ---------------------------------------------------------------------------
 
-print("\nProcesando archivos NetCDF y convirtiendo a CSV...")
+print("\nProcesando archivo NetCDF y convirtiendo a CSV...")
 
-with xr.open_dataset(ARCHIVO_FISICA_NC) as ds_fisica, xr.open_dataset(ARCHIVO_VIENTO_NC) as ds_viento:
+with xr.open_dataset(ARCHIVO_DESCARGADO) as ds_fisica:
     df_fisica = ds_fisica.to_dataframe().reset_index()
-    df_viento = ds_viento.to_dataframe().reset_index()
 
 if "depth" in df_fisica.columns:
     profundidad_minima = df_fisica["depth"].min()
     df_fisica = df_fisica[df_fisica["depth"] == profundidad_minima]
 
+# Los nombres de columnas tras to_dataframe() son los nombres de variable
+# originales (sin unidades entre corchetes), así que renombramos así:
 df_fisica = df_fisica.rename(
     columns={
+        "VAVH": "Altura_m",
+        "VAVH_UNFILTERED": "Altura_m_sin_filtrar",
+        "WIND_SPEED": "Vel_Viento",
         "latitude": "Latitud",
         "longitude": "Longitud",
-        "time": "Fecha_Hora",
-        "thetao": "Temperatura_Mar_C",
-        "zos": "Altura_Mar_Mareas_m",
     }
 )
 
-df_viento = df_viento.rename(
-    columns={
-        "latitude": "Latitud",
-        "longitude": "Longitud",
-        "time": "Fecha_Hora",
-        "wind_speed": "Velocidad_Viento_ms",
-    }
-)
-
-df_final = pd.concat([df_fisica, df_viento], ignore_index=True)
+df_final = df_fisica
 
 df_final.to_csv(ARCHIVO_DATOS_CSV, index=False)
 
@@ -143,25 +189,27 @@ mapa_cr = folium.Map(
     tiles="OpenStreetMap",
 )
 
-df_mapa = df_fisica.dropna(subset=["Temperatura_Mar_C"])
+columnas_necesarias = ["Latitud", "Longitud", "Altura_m"]
+df_mapa = df_final.dropna(subset=[c for c in columnas_necesarias if c in df_final.columns])
 
 if df_mapa.empty:
-    print("No hay datos válidos de temperatura para generar marcadores en el mapa.")
+    print("No hay datos válidos de oleaje para generar marcadores en el mapa.")
 else:
     df_mapa = df_mapa.sample(n=min(500, len(df_mapa)), random_state=42)
 
     for _, fila in df_mapa.iterrows():
+        vel_viento = fila["Vel_Viento"] if "Vel_Viento" in fila and pd.notna(fila["Vel_Viento"]) else None
         texto_popup = f"""
         <b>Coordenadas:</b> {fila['Latitud']:.2f}, {fila['Longitud']:.2f}<br>
-        <b>Temp. Mar:</b> {fila['Temperatura_Mar_C']:.2f} °C<br>
-        <b>Anomalía Marea SSH:</b> {fila['Altura_Mar_Mareas_m']:.2f} m
+        <b>Altura de ola:</b> {fila['Altura_m']:.2f} m<br>
+        <b>Vel. viento:</b> {f"{vel_viento:.2f} m/s" if vel_viento is not None else "N/D"}
         """
 
         folium.CircleMarker(
             location=[fila["Latitud"], fila["Longitud"]],
             radius=4,
             popup=folium.Popup(texto_popup, max_width=300),
-            color="blue" if fila["Temperatura_Mar_C"] < 25 else "red",
+            color="blue" if fila["Altura_m"] < 2 else "red",
             fill=True,
             fill_opacity=0.7,
         ).add_to(mapa_cr)
