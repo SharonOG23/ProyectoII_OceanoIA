@@ -58,12 +58,15 @@ FECHA_FIN = "2024-12-31T23:59:59"
 
 print("Iniciando descarga de datos desde Copernicus...")
 
+# Esto guarda tus credenciales en el entorno de ejecución para que no se detenga a pedirlas
+copernicusmarine.login(username="fbrenes", password="4HQN6J58-i8ig")
+
 print("-> Descargando datos físicos: temperatura superficial y altura del mar...")
 
 try:
     copernicusmarine.subset(
-        dataset_id="cmems_mod_glo_phy_anfc_0.083deg_PT1D-m",
-        variables=["thetao", "zos"],
+        dataset_id="cmems_mod_glo_phy_anfc_0.083deg_P1D-m",
+        variables=["tob"],
         start_datetime=FECHA_INICIO,
         end_datetime=FECHA_FIN,
         output_filename=str(ARCHIVO_FISICA_NC),
@@ -73,19 +76,19 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 
-print("-> Descargando datos de viento...")
-
-try:
-    copernicusmarine.subset(
-        dataset_id="cmems_obs-wind_glo_phy_my_l4_0.25deg_PT1D",
-        variables=["wind_speed"],
-        start_datetime=FECHA_INICIO,
-        end_datetime=FECHA_FIN,
-        output_filename=str(ARCHIVO_VIENTO_NC),
-        **COORDENADAS_CR,
-    )
-except Exception as e:
-    print(f"Error descargando viendo: {e}")
+# print("-> Descargando datos de viento...")
+#
+# try:
+#     copernicusmarine.subset(
+#         dataset_id="cmems_obs-wind_glo_phy_my_l4_0.25deg_PT1D",
+#         variables=["wind_speed"],
+#         start_datetime=FECHA_INICIO,
+#         end_datetime=FECHA_FIN,
+#         output_filename=str(ARCHIVO_VIENTO_NC),
+#         **COORDENADAS_CR,
+#     )
+# except Exception as e:
+#     print(f"Error descargando viendo: {e}")
 
 print("¡Descargas de archivos NetCDF finalizadas con éxito!")
 

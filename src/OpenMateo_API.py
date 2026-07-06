@@ -235,3 +235,13 @@ st.caption(
     "Datos meteorológicos provistos de manera gratuita por "
     "[Open-Meteo.com](https://open-meteo.com/) (Uso no comercial)."
 )
+
+
+_= """
+--------------------------------------------
+PARA EJECUTARLO
+
+streamlit run OpenMateo_API.py   EN CONSOLA
+
+--------------------------------------------
+"""
