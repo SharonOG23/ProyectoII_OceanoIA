@@ -189,3 +189,8 @@ Este proyecto es de uso académico. Datasets utilizados respetan sus licencias o
 
 OceanoIA contribuye al **ODS 14 (Vida Submarina)** apoyando a **+14,000 pescadores artesanales** de Costa Rica y al monitoreo de los **+589,000 km²** de mar territorial nacional, alineado con la estrategia de **economía azul** del MINAE.
 
+---
+
+## 🎯 Conclusión
+
+_Este proyecto nos dejó un aprendizaje muy importante, el rendimiento de un modelo no depende tanto de la **cantidad** de imagenes/datos utilizados, sino de la **calidad** de estos._
