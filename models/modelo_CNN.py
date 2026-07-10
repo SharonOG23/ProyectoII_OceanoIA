@@ -1,0 +1,357 @@
+import os
+import shutil
+import random
+from pathlib import Path
+
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras import layers, models
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from sklearn.metrics import classification_report, confusion_matrix
+
+# ----------------------------------------------------------------------------
+# 1. CONFIGURACIÓN Inicial- Ajuste de rutas
+# ----------------------------------------------------------------------------
+
+RAW_DATASET_DIR = "./Fish_Dataset"     # carpeta descomprimida de Kaggle
+ORGANIZED_DIR = "./dataset_organizado"  # Creacion train/val/test
+IMG_SIZE = (160, 160)
+BATCH_SIZE = 32 #Cantidad de imagenes que el modelo procesara al mismo tiempo
+EPOCHS = 20 #Cantidad de veces que el modelo lee, aprende y entrena los datos
+SEED = 42 #Semilla para controlar el azar del codigo
+
+random.seed(SEED) #Inicializacion de numeros pseudoaleatorios
+
+
+# ----------------------------------------------------------------------------
+# 2. REORGANIZAR EL DATASET EN train / validation / test
+# ----------------------------------------------------------------------------
+
+def encontrar_carpetas_de_imagenes(raw_dir):
+    """
+    Recorre el dataset crudo y devuelve un diccionario:
+        { "nombre_especie": [rutas de imagenes] }
+    Ignorando archivos que no sean imágenes.
+    """
+    raw_dir = Path(raw_dir) # Conversión de una cadena String a ruta de una carpeta
+    especies = {} # Creación de un diccionario llamado especies
+
+    # Conjunto (Set) para validar los tipos de extensiones permitidas
+    extensiones_validas = {".png", ".jpg", ".jpeg"}
+
+    for especie_dir in sorted(raw_dir.iterdir()): # Lista los elementos en la ruta raíz
+        if not especie_dir.is_dir(): # Filtro de seguridad para ignorar archivos sueltos
+            continue
+
+        nombre_especie = especie_dir.name # Obtiene el nombre de la carpeta de la especie
+
+        # Estructura estándar: "<especie>/<especie>" -> imágenes reales
+        subcarpeta_imagenes = especie_dir / nombre_especie
+
+        if subcarpeta_imagenes.exists():
+            imagenes = [
+                p for p in subcarpeta_imagenes.iterdir()
+                if p.suffix.lower() in extensiones_validas
+            ]
+        else:
+            # Fallback: si las imágenes están directamente en la carpeta raíz de la especie
+            imagenes = [
+                p for p in especie_dir.iterdir()
+                if p.suffix.lower() in extensiones_validas
+            ]
+
+        if imagenes:
+            especies[nombre_especie] = imagenes
+
+    return especies
+
+
+def organizar_dataset(raw_dir, output_dir, split=(0.7, 0.15, 0.15)):
+    """
+    Copia las imágenes encontradas en la estructura:
+        output_dir/train/<especie>/...
+        output_dir/validation/<especie>/...
+        output_dir/test/<especie>/...
+    """
+    assert abs(sum(split) - 1.0) < 1e-6, "Los splits deben sumar 1.0 que son la division entre train,val y test"
+
+    especies = encontrar_carpetas_de_imagenes(raw_dir)
+
+    if not especies:
+        raise RuntimeError(
+            f"No se encontraron imágenes en '{raw_dir}'. "
+            "Revisa que RAW_DATASET_DIR apunte a la carpeta correcta."
+        )
+
+    print(f"Especies encontradas ({len(especies)}):")
+    for nombre, imgs in especies.items():
+        print(f"  - {nombre}: {len(imgs)} imágenes")
+
+    output_dir = Path(output_dir)
+    if output_dir.exists():
+        print(f"\nLa carpeta '{output_dir}' ya existe, se omite la reorganización.")
+        return
+
+    for especie, imagenes in especies.items():
+        imagenes = imagenes.copy()
+        random.shuffle(imagenes)
+
+        n = len(imagenes) #Obtiene el tamaño total de cada especie
+        n_train = int(n * split[0]) #Realiza la siguiente operacion 85* 0.70 = 59.5 y con int se eliminan decimales
+        n_val = int(n * split[1]) #Realiza la siguiente operacion 85*0.15 = 12.75 y con int se eliminan decimales
+        #La siguientes lineas me ayudan asignar el porcentaje para cada carpeta que seria
+        #train= 59, val=12 y quedaria un sobrante del 14 para asignarlo a test.
+
+        #Reparto virtual
+        #Subsets genera una estrucutura de los carpetas para el modelo
+        subsets = {
+            "train": imagenes[:n_train], #Toma las fotos de la 0-58
+            "validation": imagenes[n_train:n_train + n_val], #Toma las fotos de la 59-70
+            "test": imagenes[n_train + n_val:], #Toma las fotos de la 71-100 se le llama el sobrante que seria 14
+        }
+    #Creacion de carpetas fisicas en el proyecto llamado dataset_organizado
+        for subset_name, subset_imgs in subsets.items(): #Obtiene subset name que es el nombre de las carpeta y subimg que serian las imagenes que irian en las carpetas.
+            dest_dir = output_dir / subset_name / especie
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            for img_path in subset_imgs: #Importacion de los datos
+                shutil.copy2(img_path, dest_dir / img_path.name) #Copia del archivo de la ruta vieja a la nueva
+
+    print(f"\nDataset organizado en: {output_dir}")
+
+
+# ----------------------------------------------------------------------------
+# 3. GENERADORES DE DATOS
+# ----------------------------------------------------------------------------
+
+def crear_generadores(organized_dir, img_size, batch_size):
+
+    #train_datagen es el entrenador dinamico
+    train_datagen = ImageDataGenerator(
+        rescale=1. / 255, #Normaliza los datos de 0-255 a 0-1
+        rotation_range=20, #Rota la especie 20 grados
+        width_shift_range=0.15, #Desplaza la especie hacia la izquierda
+        height_shift_range=0.15, #Desplaza la especie hacia la derecha
+        shear_range=0.15, #Aplica una distorsion inclinada a la especie
+        zoom_range=0.15, #Acerla la imagen un 15%
+        horizontal_flip=True, #Voltea la imagen como un espejo, tomar como referencia que si la imagen inicialmente ve a la izquierdo con este argumento ahora vera a la derecha.
+        fill_mode="nearest", #Al rotar la imagen queda algun espacio vacio el fill_mode rellena dichas secuencias en la imagen con los pixeles mas cercanos.
+    )
+
+    #Validacion test para evaluar el modelo
+    #Solo se aplica rescale=1. / 255 ya que evaluara si la foto que le enviemos aprendio
+    val_test_datagen = ImageDataGenerator(rescale=1. / 255)
+
+    #Conecta las reglas de alteracion de imagenes con la carpeta fisica de entrenamiento
+    train_gen = train_datagen.flow_from_directory(
+        f"{organized_dir}/train", #Busca la carpeta train
+        target_size=img_size, #Define el tamaño de la imagen
+        batch_size=batch_size, #Define cuantas imagenes le va enviar por pasos
+        class_mode="categorical", #Se aplica one-hot-encoding
+        seed=SEED,
+    )
+
+    # Conecta las reglas de alteracion de imagenes con la carpeta fisica de validacion
+    val_gen = val_test_datagen.flow_from_directory(
+        f"{organized_dir}/validation",
+        target_size=img_size,
+        batch_size=batch_size,
+        class_mode="categorical",
+        seed=SEED,
+    )
+    # Conecta las reglas de alteracion de imagenes con la carpeta fisica de pruebas
+    test_gen = val_test_datagen.flow_from_directory(
+        f"{organized_dir}/test",
+        target_size=img_size,
+        batch_size=batch_size,
+        class_mode="categorical",
+        shuffle=False, #Las imagenes se procesaran en orden alfabeticode sus carpetas y nombre de archivo
+    )
+    return train_gen, val_gen, test_gen
+
+
+# ----------------------------------------------------------------------------
+# 4. MODELO — Transfer Learning con MobileNetV2 (Creado por google)
+# ----------------------------------------------------------------------------
+
+#Arquitectura de la CNN
+#Extraccion de caracteristicas
+def construir_modelo(num_classes, img_size):
+    #Utilizacion del modelo MobileNetV2
+    #MobileNetV2 tiene una base datos previamente cargada con 14 millones de imagenes lo que le permite:
+    #detectar bordes, texturas,formas,sombras,ojos y termina siendo util para la identificacion de especies marinas.
+    base_model = MobileNetV2(
+        input_shape=img_size + (3,),#Define que va trabjar con 3 dimensiones RGB con las siguiente dimension: 224,224,3
+        include_top=False, #Extrae caracteristicas visuales abstractas
+        weights="imagenet", #Obtiene los 14 millones de imagenes de su BD
+    )
+
+    #Se congela la base y se entrena la cabeza desde 0 para que aprenda interpretar patrones visuales y los asocie a las especies
+    base_model.trainable = False  # fase 1: congelado (Extracción de Características)
+
+    model = models.Sequential([
+        base_model, #Extrae caracteristicas eseciales de cada imagen congenlando MobileNetV
+
+        layers.GlobalAveragePooling2D(), #Compactador: Transforma esa enorme matriz 3D en un vector plano y ligero de 1,280 números,
+        # donde cada número representa la presencia global de una característica visual
+        # (ej. texturas de escamas, formas de aletas).
+
+        layers.Dense(128, activation="relu"), #Es una capa de 128 neuronas completamente conectadas.
+        # Su trabajo es tomar esos 1,280 datos que le dio la capa anterior y combinarlos matemáticamente
+        # para buscar patrones específicos y exclusivos de tus peces.
+        layers.Dropout(0.3), #El dropout lo que realiza es apagar el 30% al azar de las neuronas para obligar al modelo a no depender de ciertas neuronas
+        #Evita el Overfitting
+
+        #Capa de salida
+        #Le asigna a la capa el mismo numero de neuronas que tienen las especies.
+        #Toma los porcentajes y devuele exactamente 1.0
+        layers.Dense(num_classes, activation="softmax"),
+    ])
+
+    #Compilacion del modelo
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), #Es la velocidad adaptativa que ajusta los pesos y bias en la proxima ejecucion
+        loss="categorical_crossentropy", #funcion loss: lo valora con el acierto
+        metrics=["accuracy"], #funcion evaluacion:Mide el rendimiento o precision del modelo
+    )
+    return model, base_model
+
+#Fase 2
+def fine_tune_modelo(model, base_model):
+    """Descongela las últimas capas del modelo base para ajuste fino."""
+    base_model.trainable = True #Activa las 154 capas que componen MobileNetV2.
+    # Congelamos todas menos las últimas ~30 capas ya que las utilizaremos mas adelante para aprender
+    for layer in base_model.layers[:-30]:
+        # Recorre el modelo y vuelve a congelar y deja 30 capas finales para poder aprender
+        #distinguir texturas de escamas, formas de aletas o siluetas específicas de los peces.
+        layer.trainable = False #Recorre el modelo y vuelve a congelar y deja 30 capas finales para poder aprender
+
+
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5),
+        loss="categorical_crossentropy",
+        metrics=["accuracy"],
+    )
+    return model
+
+
+# ----------------------------------------------------------------------------
+# 5. ENTRENAMIENTO Y EVALUACIÓN
+# ----------------------------------------------------------------------------
+
+def graficar_historial(history, titulo_sufijo=""):
+    #Esta línea prepara el lienzo de dibujo. Le dice a Python: "Crea una figura (fig)
+    # que contenga una fila con dos gráficos independientes (axes[0] y axes[1]),
+    # con un tamaño panorámico de 12 pulgadas de ancho por 4 de alto"
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+    #Precisión (Accuracy)
+    axes[0].plot(history.history["accuracy"], label="train")
+    axes[0].plot(history.history["val_accuracy"], label="val")
+    axes[0].set_title(f"Precisión {titulo_sufijo}")
+    axes[0].legend()
+
+    #Loss (Perdida)
+    axes[1].plot(history.history["loss"], label="train")
+    axes[1].plot(history.history["val_loss"], label="val")
+    axes[1].set_title(f"Pérdida {titulo_sufijo}")
+    axes[1].legend()
+
+    plt.tight_layout() #Ajusta margenes automaticamente
+    plt.savefig(f"historial_entrenamiento{titulo_sufijo}.png") #Guarda el grafico
+    print(f"Gráfico guardado: historial_entrenamiento{titulo_sufijo}.png")
+
+
+def evaluar_modelo(model, test_gen):
+
+    loss, acc = model.evaluate(test_gen) #Pasa todas las fotos de prueba,calcula el error promedio (loss) y el porcentaje de acierto global(acc).
+    #2 % =Transforma el numero decimal en formato legible entero
+    print(f"\nPrecisión en test: {acc:.2%}  |  Pérdida en test: {loss:.4f}")
+
+    pred = model.predict(test_gen) #Devuelve las probabilidades softmax para cade foto de prueba
+    y_pred = np.argmax(pred, axis=1) #Devuelve la posicion con el porcentaje mas alto
+    y_true = test_gen.classes #Extrae etiquetas
+    nombres_clases = list(test_gen.class_indices.keys()) #Extrae el nombre de los peces tomandolo del nombre de las carpetas
+
+    print("\nReporte de clasificación:")
+    print(classification_report(y_true, y_pred, target_names=nombres_clases))
+
+    #Generacion de la matriz de confusion.
+    print("Matriz de confusión:")
+    print(confusion_matrix(y_true, y_pred))
+
+
+# ----------------------------------------------------------------------------
+# 6. MAIN
+# ----------------------------------------------------------------------------
+
+def main():
+    #Toma las fotos brutas de RAW_DATASET_DIR y las copia divididas aleatoriamente en carpetas de:
+    # entrenamiento, validación y prueba dentro de ORGANIZED_DIR.
+    print("Paso 1: Organizando dataset...")
+    #Obtencion de las fotos brutas y la creacion de las carpetas train.test,val
+    organizar_dataset(RAW_DATASET_DIR, ORGANIZED_DIR)
+
+    #Configura los generadores. Aquí se activa el Data Augmentation para el set de entrenamiento y se leen de forma automática
+    # las etiquetas de las x clases de peces.
+    print("\nPaso 2: Creando generadores de datos...")
+    train_gen, val_gen, test_gen = crear_generadores(ORGANIZED_DIR, IMG_SIZE, BATCH_SIZE)
+    num_classes = len(train_gen.class_indices)
+    print(f"Clases detectadas: {train_gen.class_indices}")
+
+    #Carga el cuerpo de MobileNetV2 con un candado (trainable=False) y le pega tu cabeza personalizada.
+    # Entrena durante un número determinado de épocas usando mecanismos de seguridad automáticos (Callbacks).
+    # Guarda el primer progreso y genera los primeros gráficos.
+    print("\nPaso 3: Construyendo modelo (MobileNetV2 congelado)...")
+    model, base_model = construir_modelo(num_classes, IMG_SIZE)
+    model.summary()
+
+    callbacks = [
+        EarlyStopping(patience=5, restore_best_weights=True),
+        ModelCheckpoint("mejor_modelo_fase1.keras", save_best_only=True),
+    ]
+
+    print("\nPaso 4: Entrenando (fase 1 - capas base congeladas)...")
+    history1 = model.fit(
+        train_gen,
+        epochs=EPOCHS,
+        validation_data=val_gen,
+        callbacks=callbacks,
+    )
+    graficar_historial(history1, "_fase1")
+
+    #Descongela únicamente las últimas 30 capas de MobileNetV2.
+    # Vuelve a entrenar el modelo por otras 15 épocas con una velocidad 100 veces más lenta (1e-5)
+    # para afinar el ojo de la red. Guarda el segundo set de gráficos.
+    print("\nPaso 5: Fine-tuning (descongelando últimas capas)...")
+    model = fine_tune_modelo(model, base_model)
+
+    callbacks_ft = [
+        EarlyStopping(patience=5, restore_best_weights=True),
+        ModelCheckpoint("mejor_modelo_final.keras", save_best_only=True),
+    ]
+
+    history2 = model.fit(
+        train_gen,
+        epochs=15,
+        validation_data=val_gen,
+        callbacks=callbacks_ft,
+    )
+    graficar_historial(history2, "_fase2_finetune")
+
+    #Somete a la red al examen final con imágenes que jamás vio.
+    # Genera el Reporte de Clasificación (precision, recall, F1) y la Matriz de Confusión.
+    # Si el resultado es óptimo, exporta el cerebro final con extensión
+    print("\nPaso 6: Evaluando en test...")
+    evaluar_modelo(model, test_gen)
+
+    print("\nPaso 7: Guardando modelo final...")
+    model.save("clasificador_peces_final.keras")
+    print("Modelo guardado como 'clasificador_peces_final.keras'")
+
+
+if __name__ == "__main__":
+    main()
