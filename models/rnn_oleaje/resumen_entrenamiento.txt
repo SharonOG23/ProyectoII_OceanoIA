@@ -1,47 +1,47 @@
 Modelo guardado en: ../../models/rnn_oleaje\modelo_lstm.keras
-Epochs corridas: 12 (máx 80, early stopping)
-Mejor val_loss: 0.5400
+Epochs corridas: 11 (máx 80, early stopping)
+Mejor val_loss: 0.5518
 
 Variables/horizontes que SÍ alcanzaron accuracy >= 90% (con la
 tolerancia correspondiente a cada tipo de variable):
-  sea_surface_temperature@+24h (100.0%), Temp_Promedio@+24h (91.4%), Temp_Minima@+24h (97.6%), Temp_Maxima@+24h (96.0%), sea_surface_temperature@+48h (100.0%), Temp_Promedio@+48h (90.4%), Temp_Minima@+48h (96.2%), Temp_Maxima@+48h (95.3%), sea_surface_temperature@+72h (100.0%), Temp_Minima@+72h (96.7%), Temp_Maxima@+72h (95.1%)
+  sea_surface_temperature@+24h (100.0%), Temp_Promedio@+24h (93.9%), Temp_Minima@+24h (94.1%), Temp_Maxima@+24h (96.0%), sea_surface_temperature@+48h (100.0%), Temp_Promedio@+48h (91.1%), Temp_Minima@+48h (94.0%), Temp_Maxima@+48h (95.9%), sea_surface_temperature@+72h (100.0%), Temp_Promedio@+72h (91.1%), Temp_Minima@+72h (93.0%), Temp_Maxima@+72h (95.0%)
 
 Variables/horizontes por DEBAJO de 90% (esperado para variables
 ruidosas hora a hora como oleaje, corrientes y precipitación,
 incluso con un modelo bien entrenado):
-  wave_height@+24h (38.0%), ocean_current_velocity@+24h (26.4%), Precipitacion@+24h (30.0%), Vel_Viento@+24h (39.3%), wave_direction@+24h (71.0%), ocean_current_direction@+24h (41.8%), wave_height@+48h (37.6%), ocean_current_velocity@+48h (25.7%), Precipitacion@+48h (31.3%), Vel_Viento@+48h (36.8%), wave_direction@+48h (74.4%), ocean_current_direction@+48h (41.4%), wave_height@+72h (35.1%), ocean_current_velocity@+72h (25.4%), Temp_Promedio@+72h (88.7%), Precipitacion@+72h (31.6%), Vel_Viento@+72h (37.4%), wave_direction@+72h (69.2%), ocean_current_direction@+72h (40.8%)
+  wave_height@+24h (41.6%), ocean_current_velocity@+24h (27.0%), Precipitacion@+24h (33.0%), Vel_Viento@+24h (36.8%), wave_direction@+24h (73.1%), ocean_current_direction@+24h (44.2%), wave_height@+48h (38.9%), ocean_current_velocity@+48h (26.3%), Precipitacion@+48h (30.1%), Vel_Viento@+48h (36.1%), wave_direction@+48h (64.9%), ocean_current_direction@+48h (42.3%), wave_height@+72h (33.9%), ocean_current_velocity@+72h (26.0%), Precipitacion@+72h (27.1%), Vel_Viento@+72h (37.2%), wave_direction@+72h (69.1%), ocean_current_direction@+72h (42.4%)
 
 Evaluación completa en test (escala original):
 --- Horizonte +24h (n=12948) ---
-  wave_height                MAE=  0.2402 RMSE=  0.3216 R2= 0.347 accuracy(±10%)= 38.0%
-  sea_surface_temperature    MAE=  0.3813 RMSE=  0.4890 R2= 0.790 accuracy(±10%)=100.0%
-  ocean_current_velocity     MAE=  0.4053 RMSE=  0.5403 R2= 0.335 accuracy(±10%)= 26.4%
-  Temp_Promedio              MAE=  1.3068 RMSE=  1.5339 R2=-0.614 accuracy(±10%)= 91.4%
-  Temp_Minima                MAE=  0.8350 RMSE=  1.0607 R2= 0.419 accuracy(±10%)= 97.6%
-  Temp_Maxima                MAE=  1.0477 RMSE=  1.3941 R2= 0.262 accuracy(±10%)= 96.0%
-  Precipitacion              MAE=  7.7041 RMSE= 12.5405 R2=-0.158 accuracy(±2.0mm)= 30.0%
-  Vel_Viento                 MAE=  1.9893 RMSE=  2.9573 R2= 0.569 accuracy(±10%)= 39.3%
-  wave_direction             MAE_circular= 12.8234° accuracy(±15° circular)= 71.0%
-  ocean_current_direction    MAE_circular= 34.4332° accuracy(±15° circular)= 41.8%
+  wave_height                MAE=  0.2253 RMSE=  0.3113 R2= 0.388 accuracy(±10%)= 41.6%
+  sea_surface_temperature    MAE=  0.4453 RMSE=  0.5584 R2= 0.726 accuracy(±10%)=100.0%
+  ocean_current_velocity     MAE=  0.3987 RMSE=  0.5323 R2= 0.354 accuracy(±10%)= 27.0%
+  Temp_Promedio              MAE=  1.2383 RMSE=  1.4271 R2=-0.397 accuracy(±10%)= 93.9%
+  Temp_Minima                MAE=  0.9926 RMSE=  1.2525 R2= 0.190 accuracy(±10%)= 94.1%
+  Temp_Maxima                MAE=  1.0476 RMSE=  1.4049 R2= 0.251 accuracy(±10%)= 96.0%
+  Precipitacion              MAE=  7.8318 RMSE= 12.9539 R2=-0.236 accuracy(±2.0mm)= 33.0%
+  Vel_Viento                 MAE=  2.1037 RMSE=  3.1783 R2= 0.503 accuracy(±10%)= 36.8%
+  wave_direction             MAE_circular= 12.7496° accuracy(±15° circular)= 73.1%
+  ocean_current_direction    MAE_circular= 35.0897° accuracy(±15° circular)= 44.2%
 --- Horizonte +48h (n=12948) ---
-  wave_height                MAE=  0.2539 RMSE=  0.3462 R2= 0.247 accuracy(±10%)= 37.6%
-  sea_surface_temperature    MAE=  0.4122 RMSE=  0.5129 R2= 0.770 accuracy(±10%)=100.0%
-  ocean_current_velocity     MAE=  0.4216 RMSE=  0.5572 R2= 0.291 accuracy(±10%)= 25.7%
-  Temp_Promedio              MAE=  1.3285 RMSE=  1.5754 R2=-0.703 accuracy(±10%)= 90.4%
-  Temp_Minima                MAE=  0.8772 RMSE=  1.1099 R2= 0.367 accuracy(±10%)= 96.2%
-  Temp_Maxima                MAE=  1.1337 RMSE=  1.4871 R2= 0.160 accuracy(±10%)= 95.3%
-  Precipitacion              MAE=  7.9663 RMSE= 12.9748 R2=-0.229 accuracy(±2.0mm)= 31.3%
-  Vel_Viento                 MAE=  2.0637 RMSE=  3.0746 R2= 0.536 accuracy(±10%)= 36.8%
-  wave_direction             MAE_circular= 12.2901° accuracy(±15° circular)= 74.4%
-  ocean_current_direction    MAE_circular= 34.2582° accuracy(±15° circular)= 41.4%
+  wave_height                MAE=  0.2706 RMSE=  0.3776 R2= 0.104 accuracy(±10%)= 38.9%
+  sea_surface_temperature    MAE=  0.3957 RMSE=  0.4999 R2= 0.782 accuracy(±10%)=100.0%
+  ocean_current_velocity     MAE=  0.4097 RMSE=  0.5377 R2= 0.340 accuracy(±10%)= 26.3%
+  Temp_Promedio              MAE=  1.3423 RMSE=  1.5722 R2=-0.696 accuracy(±10%)= 91.1%
+  Temp_Minima                MAE=  1.0007 RMSE=  1.2677 R2= 0.174 accuracy(±10%)= 94.0%
+  Temp_Maxima                MAE=  1.0925 RMSE=  1.4487 R2= 0.203 accuracy(±10%)= 95.9%
+  Precipitacion              MAE=  7.7583 RMSE= 12.6732 R2=-0.172 accuracy(±2.0mm)= 30.1%
+  Vel_Viento                 MAE=  2.1513 RMSE=  3.2906 R2= 0.469 accuracy(±10%)= 36.1%
+  wave_direction             MAE_circular= 14.8469° accuracy(±15° circular)= 64.9%
+  ocean_current_direction    MAE_circular= 34.8841° accuracy(±15° circular)= 42.3%
 --- Horizonte +72h (n=12948) ---
-  wave_height                MAE=  0.2725 RMSE=  0.3638 R2= 0.174 accuracy(±10%)= 35.1%
-  sea_surface_temperature    MAE=  0.4013 RMSE=  0.4976 R2= 0.784 accuracy(±10%)=100.0%
-  ocean_current_velocity     MAE=  0.3999 RMSE=  0.5210 R2= 0.379 accuracy(±10%)= 25.4%
-  Temp_Promedio              MAE=  1.4805 RMSE=  1.7038 R2=-0.997 accuracy(±10%)= 88.7%
-  Temp_Minima                MAE=  0.8741 RMSE=  1.1043 R2= 0.375 accuracy(±10%)= 96.7%
-  Temp_Maxima                MAE=  1.1385 RMSE=  1.4939 R2= 0.154 accuracy(±10%)= 95.1%
-  Precipitacion              MAE=  8.0830 RMSE= 13.1234 R2=-0.260 accuracy(±2.0mm)= 31.6%
-  Vel_Viento                 MAE=  2.1546 RMSE=  3.2311 R2= 0.490 accuracy(±10%)= 37.4%
-  wave_direction             MAE_circular= 13.2794° accuracy(±15° circular)= 69.2%
-  ocean_current_direction    MAE_circular= 33.5247° accuracy(±15° circular)= 40.8%
+  wave_height                MAE=  0.2836 RMSE=  0.3817 R2= 0.091 accuracy(±10%)= 33.9%
+  sea_surface_temperature    MAE=  0.4657 RMSE=  0.5809 R2= 0.706 accuracy(±10%)=100.0%
+  ocean_current_velocity     MAE=  0.4360 RMSE=  0.5703 R2= 0.256 accuracy(±10%)= 26.0%
+  Temp_Promedio              MAE=  1.4113 RMSE=  1.6286 R2=-0.825 accuracy(±10%)= 91.1%
+  Temp_Minima                MAE=  1.0005 RMSE=  1.2667 R2= 0.177 accuracy(±10%)= 93.0%
+  Temp_Maxima                MAE=  1.2480 RMSE=  1.6167 R2= 0.009 accuracy(±10%)= 95.0%
+  Precipitacion              MAE=  7.9400 RMSE= 12.8926 R2=-0.216 accuracy(±2.0mm)= 27.1%
+  Vel_Viento                 MAE=  2.1829 RMSE=  3.2768 R2= 0.475 accuracy(±10%)= 37.2%
+  wave_direction             MAE_circular= 13.0447° accuracy(±15° circular)= 69.1%
+  ocean_current_direction    MAE_circular= 36.2984° accuracy(±15° circular)= 42.4%
