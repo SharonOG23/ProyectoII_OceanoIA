@@ -93,3 +93,60 @@ Por tanto:
    robusta) se concentrara en las variables donde alcanzar 90% sí tenía
    sentido físico y estadístico, documentando explícitamente en el notebook
    final cuáles variables cumplen la meta y cuáles no, y por qué.
+
+---
+## **Explicación sobre la carga perezosa para CNN**
+**Herramienta IA utilizada:** **Gemini**
+
+**Prompt #1:**
+```
+Me podrias explicar esta funcion para saber como puedo cargar el modelo?
+```
+```python
+_models = {}
+
+def _load(key: str, path: str):
+    """Carga modelos solo cuando se necesitan."""
+    if key not in _models:
+        import tensorflow as tf
+        try:
+            _models[key] = tf.keras.models.load_model(path)
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Modelo no disponible: {path}. Entrénalo primero. ({e})",
+            )
+    return _models[key]
+```
+**Respuesta recibida:**
+```
+Esta función implementa un patrón llamado Carga Perezosa. 
+Su objetivo es que el modelo de Inteligencia Artificial no se cargue en la memoria
+RAM en cuanto se enciende el servidor (lo cual ralentizaría el inicio de la API), 
+sino únicamente cuando un usuario realiza la primera petición que lo necesita. 
+La línea `if key not in _models:` revisa si el modelo ya fue cargado previamente;
+si ya existe en el diccionario `_models`, se lo salta y lo devuelve de inmediato, 
+ahorrando muchísimo tiempo de procesamiento en las siguientes llamadas.
+```
+**Prompt #2:**
+```
+En el codigo que te pase para que sirve el _models = {} que esta afuera de la funcion?
+```
+**Respuesta recibida:**
+```
+Al estar declarado fuera de la función, _models actúa como una variable global o 
+caché en memoria. En Python, las variables dentro de una función desaparecen cuando 
+esta termina (local scope), pero las globales persisten durante todo el ciclo de 
+vida en que el servidor de FastAPI esté encendido. Funciona como una "bóveda": la 
+primera vez guardas el modelo ahí dentro usando una clave (key), y en las siguientes 
+peticiones la función va directamente a la bóveda a sacarlo en lugar de leer el disco duro cada vez.
+```
+## Reflexión.
+```
+Esta IA me sirvio mucho como para poder entender esa parte del codigo ya
+que se me hacia un enredo. Me explico como funciona la "carga perezosa" 
+y como se usa el diccionario global _models = {} para guardar los modelos en la memoria 
+de la compu, con esto entendi que no hay que cargar todo desde el inicio
+para no saturar la RAM y al dejar el modelo guardado ahi, las respuestas de la 
+API son mas rapidas a partir de la segunda consulta.
+```
