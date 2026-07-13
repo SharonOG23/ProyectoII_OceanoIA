@@ -16,7 +16,6 @@ OceanoIA es un sistema inteligente que apoya a **INCOPESCA, MarViva, Guardacosta
 |--------|--------|----------|
 | 🐟 **Identificación de especies** | **CNN** | Clasificar peces capturados para verificar vedas, tallas mínimas y especies protegidas |
 | 🌊 **Pronóstico oceanográfico** | **RNN / LSTM** | Predecir oleaje, viento, marea y SST en las próximas 24–72 h |
-| 🎯 **Recomendación de pesca** | **ANN** | Sugerir acciones sostenibles (pescar, cambiar zona, regresar a puerto, etc.) |
 
 ---
 
@@ -34,17 +33,15 @@ OceanoIA/
 │   ├── 01_EDA.ipynb
 │   ├── 02_CNN_Especies.ipynb
 │   ├── 03_RNN_Oceanografia.ipynb
-│   └── 04_ANN_Recomendacion.ipynb
 ├── src/
 │   ├── data_prep.py            # Preprocesamiento general
 │   ├── marine_api.py           # Cliente Open-Meteo Marine
 │   └── train/
 │       ├── cnn.py
 │       ├── rnn.py
-│       └── ann.py
 ├── models/                     # Modelos entrenados .h5 / .keras
 ├── api/
-│   └── main.py                 # FastAPI: /predict/especie, /predict/oceano, /predict/accion
+│   └── main.py                 # FastAPI: /predict/especie, /predict/oceano
 └── app/
     ├── Home.py                 # Frontend Streamlit
     └── assets/
@@ -103,10 +100,9 @@ Los modelos entrenados se guardan en `models/`.
 streamlit run app/Home.py
 ```
 
-Abrirá `http://localhost:8501` con cuatro pestañas:
+Abrirá `http://localhost:8501` con tres pestañas:
 - 📷 Identificador de especies
 - 🌊 Pronóstico oceánico
-- 🗺️ Mapa de recomendaciones
 - 📊 Dashboard combinado
 
 ### Lanzar la API REST (opcional)
@@ -118,7 +114,6 @@ uvicorn api.main:app --reload
 Endpoints disponibles:
 - `POST /predict/especie` (imagen)
 - `POST /predict/oceano` (serie temporal)
-- `POST /predict/accion` (features tabulares)
 
 ---
 
@@ -131,7 +126,6 @@ Endpoints disponibles:
 | Open-Meteo Marine API | RNN | https://open-meteo.com/en/docs/marine-weather-api |
 | NOAA ERDDAP | RNN | https://coastwatch.pfeg.noaa.gov/erddap/ |
 | IMN Costa Rica | RNN | https://www.imn.ac.cr/ |
-| Sintético (sklearn) | ANN | Generado con `make_classification` + reglas INCOPESCA |
 
 ---
 
@@ -141,7 +135,6 @@ Endpoints disponibles:
 |--------|---------|--------|
 | CNN | Accuracy / F1-score | ≥ 90% |
 | RNN | RMSE / MAE | Bajo (según escala) |
-| ANN | Precision / Recall | ≥ 85% |
 
 ---
 
@@ -160,9 +153,8 @@ Endpoints disponibles:
 
 - ✅ Integración en tiempo real con **Open-Meteo Marine API**
 - ✅ **Alerta automática** al detectar especies protegidas (tortugas, tiburones martillo, marlines)
-- ✅ Mapa interactivo con **Folium** mostrando zonas pesqueras y Áreas Marinas Protegidas (AMP)
 - 🔄 Modo offline (TensorFlow Lite) — *en progreso*
-- 🔄 Bot Telegram/WhatsApp — *en progreso*
+- 🔄 Bot Telegram/WhatsApp — *creado*
 
 ---
 
