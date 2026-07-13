@@ -4,23 +4,29 @@ Home.py
 App Streamlit demo de OceanoIA con cuatro pestañas:
   1. 📷 Identificador de especies (CNN)
   2. 🌊 Pronóstico oceánico (RNN)
-  3. 🗺️ Mapa de recomendaciones (ANN + Folium)
-  4. 📊 Dashboard combinado
+  3. 📊 Dashboard combinado
+
+Recomendación:
+La API debe de ejecutarse primero
+    uvicorn api.main:app --reload
 
 Ejecutar:
     streamlit run app/Home.py
 """
 
-from __future__ import annotations
+from __future__ import annotations # Nos deja usar dict[int, str] como tipo de datos para que
+# Python no llegue a tener errores, es más para tener compatibilidad.
 
-import sys
-from pathlib import Path
+import sys # Libreria que nos ayuda a encontrar las carpetas del proyecto.
+from pathlib import Path # Libreria que nos ayuda a manejar rutas de carpetas/archivos.
 
+# Permite a Python importar módulos desde la carpeta raíz del proyecto.
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-import numpy as np
-import pandas as pd
-import streamlit as st
+import numpy as np # Librería para trabajar con números y matrices.
+import pandas as pd # Libreria para trabajar con tablas y datos.
+import requests # Libreria se comunica con la API.
+import streamlit as st # Crea la interfaz gráfica de la aplicación.
 
 # ===================== Config general =====================
 st.set_page_config(
@@ -29,6 +35,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# URL base de la API FastAPI
+API_BASE_URL = "http://127.0.0.1:8000"
 
 # ===================== Sidebar =====================
 st.sidebar.image(
@@ -49,10 +58,9 @@ st.markdown(
 st.markdown("---")
 
 # ===================== Tabs =====================
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3 = st.tabs([
     "📷 Identificar Especie",
     "🌊 Pronóstico Oceánico",
-    "🗺️ Mapa de Recomendaciones",
     "📊 Dashboard",
 ])
 
@@ -69,122 +77,112 @@ with tab1:
         col1, col2 = st.columns(2)
         with col1:
             st.image(uploaded, caption="Imagen cargada", use_column_width=True)
+
         with col2:
             with st.spinner("Analizando..."):
-                # ===== Demo placeholder (descomentar cuando el modelo esté entrenado) =====
-                # import tensorflow as tf
-                # from tensorflow.keras.preprocessing import image
-                # model = tf.keras.models.load_model("models/cnn_especies.keras")
-                # img = image.load_img(uploaded, target_size=(128, 128))
-                # arr = np.expand_dims(image.img_to_array(img) / 255.0, 0)
-                # preds = model.predict(arr)[0]
-                # ...
+                try:
+                    # uploaded es un BytesIO-like que ya viene desde st.file_uploader;
+                    # reseteamos el puntero por si Streamlit ya lo leyó para el st.image de arriba.
+                    uploaded.seek(0)
+                    files = {"file": (uploaded.name, uploaded, uploaded.type)}
+                    resp = requests.post(
+                        f"{API_BASE_URL}/predict/especie",
+                        files=files,
+                        timeout=120,
+                    )
+                    resp.raise_for_status()
+                    resultado = resp.json()
+                except requests.exceptions.ConnectionError:
+                    st.error(
+                        "❌ No se pudo conectar con la API. "
+                        f"¿Está corriendo uvicorn en `{API_BASE_URL}`? "
+                        "Ejecuta `uvicorn api.main:app --reload` en otra terminal."
+                    )
+                    st.stop()
+                except requests.exceptions.HTTPError:
+                    detalle = resp.json().get("detail", resp.text)
+                    st.error(f"❌ Error de la API ({resp.status_code}): {detalle}")
+                    st.stop()
+                except Exception as e:
+                    st.error(f"❌ Error inesperado: {e}")
+                    st.stop()
 
-                # Demo simulada
-                especies = ["Dorado", "Atún aleta amarilla", "Pargo mancha",
-                            "Corvina reina", "Marlín", "Tortuga marina"]
-                preds = np.random.dirichlet(np.ones(len(especies)))
-                idx = int(np.argmax(preds))
+            especie_pred = resultado["especie"]
+            confianza    = resultado["confianza"]
+            protegida    = resultado["protegida"]
+            todas        = resultado["todas"]
 
-            st.success(f"**Especie:** {especies[idx]}")
-            st.metric("Confianza", f"{preds[idx]*100:.1f}%")
+            st.success(f"**Especie:** {especie_pred.replace('_', ' ').title()}")
+            st.metric("Confianza", f"{confianza * 100:.1f}%")
 
-            protegidas = ["Marlín", "Tortuga marina", "Tiburón martillo"]
-            if especies[idx] in protegidas:
-                st.error("🚨 **ALERTA — Especie protegida.** Devolver al mar inmediatamente.")
+            if protegida:
+                st.error("🚨 **ALERTA — Especie protegida.** Devolver al mar inmediatamente. Está prohibida su captura.")
             else:
                 st.info("✅ Especie no protegida. Verificar talla mínima y veda.")
 
             st.markdown("**Probabilidades por clase:**")
-            df_probs = pd.DataFrame({"Especie": especies, "Probabilidad": preds})
+            df_probs = pd.DataFrame({
+                "Especie": list(todas.keys()),
+                "Probabilidad": list(todas.values()),
+            }).sort_values("Probabilidad", ascending=False)
             st.bar_chart(df_probs.set_index("Especie"))
 
 # ===================== TAB 2: RNN Pronóstico =====================
 with tab2:
     st.header("🌊 Pronóstico oceánico — próximas 72 horas")
-    st.markdown("Predicción de oleaje, temperatura del mar y viento usando LSTM.")
+    st.markdown("Predicción de oleaje, temperatura del mar y viento.")
 
     zonas = [
-        "golfo_nicoya", "golfo_dulce", "pacifico_norte",
-        "pacifico_central", "pacifico_sur",
-        "caribe_norte", "caribe_sur",
+        "Caribe",
+        "Pacifico_Central",
+        "Pacifico_Sur",
     ]
+
     zona = st.selectbox("Selecciona una zona costera:", zonas)
 
     if st.button("Obtener pronóstico"):
-        with st.spinner("Descargando datos de Open-Meteo Marine..."):
-            try:
-                from src.marine_api import get_zone_forecast
-                df = get_zone_forecast(zona, days=3)
 
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Oleaje máx. 72h", f"{df['wave_height'].max():.2f} m")
-                col2.metric("SST promedio",     f"{df['sea_surface_temperature'].mean():.1f} °C")
-                col3.metric("Período promedio", f"{df['wave_period'].mean():.1f} s")
-
-                st.line_chart(df.set_index("time")[["wave_height"]],
-                              use_container_width=True)
-                st.line_chart(df.set_index("time")[["sea_surface_temperature"]],
-                              use_container_width=True)
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-# ===================== TAB 3: ANN + Mapa =====================
-with tab3:
-    st.header("🗺️ Recomendación de pesca + mapa interactivo")
-
-    col1, col2 = st.columns([1, 2])
-
-    with col1:
-        st.markdown("**Ingresa las condiciones actuales:**")
-        altura  = st.slider("Altura del oleaje (m)", 0.0, 5.0, 1.5, 0.1)
-        viento  = st.slider("Viento (km/h)", 0, 80, 20)
-        sst     = st.slider("Temperatura del mar (°C)", 22.0, 32.0, 28.0, 0.1)
-        dist    = st.slider("Distancia a costa (km)", 1, 80, 20)
-        especie = st.selectbox("Especie objetivo", ["dorado", "atun", "pargo", "corvina", "otro"])
-        veda    = st.checkbox("¿Hay veda activa?")
-        amp     = st.checkbox("¿Es Área Marina Protegida?")
-
-        if st.button("Obtener recomendación"):
-            # Lógica simplificada (espejo de las reglas; sustituir por modelo real)
-            if altura > 2.5 or viento > 35:
-                rec, color, msg = "REGRESAR A PUERTO", "⚫", "Alerta meteorológica."
-            elif veda or amp:
-                rec, color, msg = "NO PESCAR", "🔴", "Veda activa o área protegida."
-            elif altura > 1.8 or viento > 25:
-                rec, color, msg = "PESCA CON PRECAUCIÓN", "🟡", "Restricciones leves."
-            elif dist > 60:
-                rec, color, msg = "CAMBIAR ZONA", "🔵", "Hay zona alternativa más cercana."
-            elif 26 <= sst <= 30 and altura < 1.5:
-                rec, color, msg = "PESCA RECOMENDADA", "🟢", "Condiciones óptimas."
-            else:
-                rec, color, msg = "PESCA CON PRECAUCIÓN", "🟡", "Condiciones aceptables."
-
-            st.markdown(f"### {color} **{rec}**")
-            st.info(msg)
-
-    with col2:
         try:
-            import folium
-            from streamlit_folium import st_folium
-            from src.marine_api import ZONAS_CR
+            r = requests.get(
+                f"{API_BASE_URL}/predict/oceano",
+                params={"zona": zona}
+            )
 
-            m = folium.Map(location=[9.7, -84.0], zoom_start=7, tiles="CartoDB positron")
-            for nombre, (lat, lon) in ZONAS_CR.items():
-                folium.Marker(
-                    [lat, lon],
-                    popup=f"<b>{nombre.replace('_', ' ').title()}</b>",
-                    icon=folium.Icon(color="blue", icon="anchor", prefix="fa"),
-                ).add_to(m)
-            st_folium(m, width=700, height=500)
-        except ImportError:
-            st.warning("Instala `folium` y `streamlit-folium` para ver el mapa.")
+            datos = r.json()
 
-# ===================== TAB 4: Dashboard =====================
-with tab4:
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "Oleaje máx. 72h",
+                f"{datos['metricas']['oleaje_max']:.2f} m"
+            )
+
+            col2.metric(
+                "SST promedio",
+                f"{datos['metricas']['sst']:.1f} °C"
+            )
+
+            col3.metric(
+                "Período promedio",
+                f"{datos['metricas']['periodo']:.1f} s"
+            )
+
+            df = pd.DataFrame({
+                "Oleaje": datos["wave_height"],
+                "Temperatura": datos["sea_surface_temperature"]
+            })
+
+            st.line_chart(df["Oleaje"])
+            st.line_chart(df["Temperatura"])
+
+        except Exception as e:
+            st.error(e)
+
+# ===================== TAB 3: Dashboard =====================
+with tab3:
     st.header("📊 Dashboard integrado")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Especies catalogadas", "8")
+    col1.metric("Especies catalogadas", "16")
     col2.metric("Zonas monitoreadas", "7")
     col3.metric("Pescadores beneficiados", "14,000+")
     col4.metric("Km² de mar territorial", "589,000")
@@ -192,19 +190,18 @@ with tab4:
     st.markdown("---")
     st.subheader("Datasets utilizados")
     st.table(pd.DataFrame({
-        "Módulo": ["CNN", "RNN/LSTM", "ANN"],
+        "Módulo": ["CNN", "RNN/LSTM"],
         "Dataset principal": [
             "Large-Scale Fish Dataset (Kaggle)",
             "Open-Meteo Marine API + NOAA + IMN",
-            "Sintético (sklearn) + reglas INCOPESCA",
         ],
-        "Métrica":  ["Accuracy / F1 ≥ 90%", "RMSE / MAE", "Precision / Recall ≥ 85%"],
+        "Métrica":  ["Accuracy / F1 ≥ 90%", "RMSE / MAE"],
     }))
 
     st.markdown("---")
     st.markdown(
-        "**Equipo:** Marco Álvarez Quirós · Sharon Obando Gómez · Fabián Brenes Loría · Johel Barquero Carvajal ·  "  
-        "**Profesor:** Osvaldo Gónzalez Chaves  ·  "  
-        "**Curso:** Inteligencia Artificial 2026  ·  "  
-        "**Entrega:** 13 de julio 2026"
+        "**Equipo:** Marco Álvarez Quirós · Sharon Obando Gómez · Fabián Brenes Loría · Johel Barquero Carvajal ·"
+        "**Profesor:** Osvaldo González Chaves · "
+        "**Curso:** Inteligencia Artificial 2026  ·  "
+        "**Entrega:** 13 de julio 2026 ·"
     )
