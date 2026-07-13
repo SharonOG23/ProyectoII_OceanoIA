@@ -64,4 +64,4 @@ desktop.ini
 data/raw/RNN/CostaRica_Marine_OpenMateo_2020_Hoy.csv
 data/raw/RNN/CostaRica_Marine_OpenMateo_2022_Hoy.csv
 src/.cache.sqlite
-
+RNN_LSTM_Predic.py
