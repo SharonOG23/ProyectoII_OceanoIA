@@ -1,0 +1,20 @@
+[
+  {
+    "region": "Caribe",
+    "omitido": false,
+    "rmse_test": 0.4031648127850115,
+    "dias_entrenamiento": 1651
+  },
+  {
+    "region": "Pacifico_Central",
+    "omitido": false,
+    "rmse_test": 0.38430474922534175,
+    "dias_entrenamiento": 1639
+  },
+  {
+    "region": "Pacifico_Sur",
+    "omitido": false,
+    "rmse_test": 0.4074781960236012,
+    "dias_entrenamiento": 342
+  }
+]
