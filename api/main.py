@@ -5,6 +5,7 @@ API REST OceanoIA con FastAPI.
 
 Endpoints:
   - POST /predict/especie  (imagen del pez)
+  - POST /predict/especie2  (imagen del pez)
   - POST /predict/oceano   (serie temporal de 30 días)
 
 Ejecutar:
@@ -36,8 +37,11 @@ app = FastAPI(
 ) # Aquí creamos la API.
 
 # ===================== Carga perezosa de modelos =====================
+
+# ===================== CNN: Primer Modelo =====================
 _models = {} # Aquí guardamos el modelo.
 _clases_cache = None # Aquí se guarda la lista de especies ya calculados, para no tener que volver a recalcular otra ves cada que se pide una predicción.
+_clases_cache_2 = None
 
 # IMPORTANTE: debe coincidir EXACTAMENTE con IMG_SIZE del script de entrenamiento
 CNN_IMG_SIZE = (160, 160)
@@ -128,17 +132,68 @@ def _load_clases() -> dict[int, str]: # Carga la lista de nombres de las clases.
 # Especies protegidas / de veda.
 ESPECIES_PROTEGIDAS = {"Marlin_pez_vela", "Tortuga", "Tiburon_martillo"}
 
+# ===================== CNN: Segundo Modelo (modelo_2) =====================
+# Mismo patrón que el primer modelo, pero con su propio tamaño de imagen,
+# su propia ruta, y sus propias 7 especies. Como este modelo NO usa
+# transfer learning es convolucional + pooling.
+
+CNN2_IMG_SIZE = (128, 128)  # IMPORTANTE: debe coincidir con el entrenamiento de modelo_2
+CNN2_MODEL_PATH = "models/modelo_especies_marinas1 1.keras"
+
+# Especies protegidas / de veda para el modelo 2 (ajustar si aplica).
+ESPECIES_PROTEGIDAS_2 = {"Marlin_Pez_Vela", "Tortuga_Marina", "Tiburon_Martillo"}
+
+
+def _load_cnn2(path: str):
+    """
+    Carga el segundo modelo CNN (modelo_2). A diferencia de _load_cnn(),
+    aquí intentamos la carga DIRECTA primero (load_model normal), porque
+    al ser una arquitectura convolucional simple (Conv2D + Pooling, sin
+    un modelo Functional anidado como MobileNetV2), no debería tener el
+    mismo bug de deserialización de Keras 3 que tuvimos con el modelo 1.
+    """
+    if "cnn2" not in _models:
+        import tensorflow as tf
+        try:
+            _models["cnn2"] = tf.keras.models.load_model(path, compile=False)
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Modelo no disponible: {path}. Entrénalo primero. ({e})",
+            )
+    return _models["cnn2"]
+
+
+def _load_clases_2() -> dict[int, str]:
+    """
+    Mapeo indice -> nombre_especie para el modelo_2. Orden calculado con
+    sorted() sobre los nombres de carpeta reales (case-sensitive, igual
+    que flow_from_directory internamente).
+    """
+    global _clases_cache_2
+    if _clases_cache_2 is None:
+        clases_ordenadas = sorted([
+            "Corvina_Reina",
+            "Marlin_Pez_Vela",
+            "Pargo_Rojo",
+            "Pez Aleta_amarillo",
+            "Pez_Dorado",
+            "Tiburon_Martillo",
+            "Tortuga_Marina",
+        ])
+        _clases_cache_2 = dict(enumerate(clases_ordenadas))
+    return _clases_cache_2
+
 # ===================== Health =====================
 @app.get("/") # Crea un endpoint que responde a las solicitudes GET.
 def root(): # Define la función root, que se ejecuta cuando alguien entra a la ruta principal.
     return { # Devuelve la información en formato JSON.
         "name": "OceanoIA API",
-        "endpoints": ["/predict/especie", "/predict/oceano"],
+        "endpoints": ["/predict/especie", "/predict/especie2" ,"/predict/oceano"],
         "status": "ok",
     }
 
-
-# ===================== CNN: especie =====================
+# ===================== CNN: especie (modelo 1)=====================
 @app.post("/predict/especie") # Crea un endpoint POST para predecir la especie de una imagen.
 async def predict_especie(file: UploadFile = File(...)): # Define una función que recibe una imagen enviada por el usuario.
     """Recibe una imagen y devuelve la especie con probabilidad."""
@@ -176,6 +231,44 @@ async def predict_especie(file: UploadFile = File(...)): # Define una función q
     except Exception as e: # Captura cualquier otro error inesperado.
         raise HTTPException(status_code=500, detail=str(e)) # Devuelve un error 500 indicando que ocurrió un problema interno en el servidor.
 
+# ===================== CNN: especie2 (modelo 2) =====================
+@app.post("/predict/especie2")
+async def predict_especie2(file: UploadFile = File(...)):
+
+    try:
+        from PIL import Image, UnidentifiedImageError
+
+        idx_to_clase = _load_clases_2()  # Carga los nombres de las 7 especies del modelo_2.
+        model = _load_cnn2(CNN2_MODEL_PATH)  # Carga (o reutiliza) el modelo_2 ya cargado en memoria.
+
+        img_bytes = await file.read()
+        if not img_bytes:
+            raise HTTPException(status_code=400, detail="Archivo vacío.")
+
+        try:
+            # OJO: usa CNN2_IMG_SIZE (128x128), NO CNN_IMG_SIZE (160x160) del modelo 1.
+            img = Image.open(io.BytesIO(img_bytes)).convert("RGB").resize(CNN2_IMG_SIZE)
+        except UnidentifiedImageError:
+            raise HTTPException(status_code=400, detail="El archivo no es una imagen válida.")
+
+        arr = np.expand_dims(np.array(img) / 255.0, 0).astype("float32")
+
+        preds = model.predict(arr, verbose=0)[0]
+        idx = int(np.argmax(preds))
+        especie = idx_to_clase[idx]
+
+        return {
+            "especie": especie,
+            "confianza": float(preds[idx]),
+            "protegida": especie in ESPECIES_PROTEGIDAS_2,
+            "todas": {
+                idx_to_clase[i]: float(p) for i, p in enumerate(preds)
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ===================== RNN: pronóstico =====================
 # Carga del modelo.
