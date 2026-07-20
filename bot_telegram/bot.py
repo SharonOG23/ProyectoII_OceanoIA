@@ -84,7 +84,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Inteligencia Artificial 2026.\n\n"
         "Somos estudiantes de la carrera Big Data del Colegio Universitario de Cartago, hemos creado este Bot para poder ayudar a:\n\n"
         "INCOPESCA, MarViva, Guardacostas y pescadores artesanales a identificar especies marinas y predecir condiciones oceanográficas\n\n"
-        "🆘 *Como te podemos ayudar?*\n\n"
+        "🆘 *¿Cómo te podemos ayudar?*\n\n"
         "📷 Envía una *foto* de un pez capturado y te diré la especie "
         "y si está en veda, si es protegida o no.\n\n"
         "⛅ Usa `/clima <zona>` para el pronóstico oceánico. Zonas disponibles:\n"
