@@ -65,67 +65,98 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ===================== TAB 1: CNN Identificación =====================
+# ===================== TAB 1: CNN Identificación (comparación) =====================
 with tab1:
     st.header("📷 Identificación de especies marinas (CNN)")
     st.markdown(
-        "Sube una foto del pez capturado. El modelo identifica la especie y verifica "
-        "si está en veda, es protegida o cumple talla mínima."
+        "Sube una foto del pez capturado. Se envía a **ambos modelos** entrenados, "
+        "para comparar cómo predice cada uno la misma imagen."
     )
+
+
+    def _predecir(endpoint, uploaded_file):
+        """
+        Llama a un endpoint de predicción de especie y devuelve el JSON
+        de resultado, o None si hubo error (mostrando el error en pantalla).
+        """
+        try:
+            uploaded_file.seek(0)  # reseteamos el puntero del archivo antes de cada envío
+            files = {"file": (uploaded_file.name, uploaded_file, uploaded_file.type)}
+            resp = requests.post(f"{API_BASE_URL}{endpoint}", files=files, timeout=120)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.ConnectionError:
+            st.error(
+                "❌ No se pudo conectar con la API. "
+                f"¿Está corriendo uvicorn en `{API_BASE_URL}`?"
+            )
+            return None
+        except requests.exceptions.HTTPError:
+            detalle = resp.json().get("detail", resp.text)
+            st.error(f"❌ Error de la API ({resp.status_code}): {detalle}")
+            return None
+        except Exception as e:
+            st.error(f"❌ Error inesperado: {e}")
+            return None
+
+
+    def _mostrar_resultado(resultado):
+        """Muestra especie, confianza, alerta de protegida, y gráfico de probabilidades."""
+        especie_pred = resultado["especie"]
+        confianza = resultado["confianza"]
+        protegida = resultado["protegida"]
+        todas = resultado["todas"]
+
+        st.success(f"**Especie:** {especie_pred.replace('_', ' ').title()}")
+        st.metric("Confianza", f"{confianza * 100:.1f}%")
+
+        if protegida:
+            st.error("🚨 **ALERTA — Especie protegida.** Devolver al mar inmediatamente.")
+        else:
+            st.info("✅ Especie no protegida. Verificar talla mínima y veda.")
+
+        st.markdown("**Probabilidades por clase:**")
+        df_probs = pd.DataFrame({
+            "Especie": list(todas.keys()),
+            "Probabilidad": list(todas.values()),
+        }).sort_values("Probabilidad", ascending=False)
+        st.bar_chart(df_probs.set_index("Especie"))
+
 
     uploaded = st.file_uploader("Selecciona una imagen", type=["jpg", "jpeg", "png"])
     if uploaded:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.image(uploaded, caption="Imagen cargada", use_column_width=True)
+        st.image(uploaded, caption="Imagen cargada", width=300)
+        st.markdown("---")
 
-        with col2:
-            with st.spinner("Analizando..."):
-                try:
-                    # uploaded es un BytesIO-like que ya viene desde st.file_uploader;
-                    # reseteamos el puntero por si Streamlit ya lo leyó para el st.image de arriba.
-                    uploaded.seek(0)
-                    files = {"file": (uploaded.name, uploaded, uploaded.type)}
-                    resp = requests.post(
-                        f"{API_BASE_URL}/predict/especie",
-                        files=files,
-                        timeout=120,
-                    )
-                    resp.raise_for_status()
-                    resultado = resp.json()
-                except requests.exceptions.ConnectionError:
-                    st.error(
-                        "❌ No se pudo conectar con la API. "
-                        f"¿Está corriendo uvicorn en `{API_BASE_URL}`? "
-                        "Ejecuta `uvicorn api.main:app --reload` en otra terminal."
-                    )
-                    st.stop()
-                except requests.exceptions.HTTPError:
-                    detalle = resp.json().get("detail", resp.text)
-                    st.error(f"❌ Error de la API ({resp.status_code}): {detalle}")
-                    st.stop()
-                except Exception as e:
-                    st.error(f"❌ Error inesperado: {e}")
-                    st.stop()
+        col_modelo1, col_modelo2 = st.columns(2)
 
-            especie_pred = resultado["especie"]
-            confianza    = resultado["confianza"]
-            protegida    = resultado["protegida"]
-            todas        = resultado["todas"]
+        with col_modelo1:
+            st.subheader("🔵 Modelo 1 (16 especies)")
+            with st.spinner("Analizando con Modelo 1..."):
+                resultado_1 = _predecir("/predict/especie", uploaded)
+            if resultado_1:
+                _mostrar_resultado(resultado_1)
 
-            st.success(f"**Especie:** {especie_pred.replace('_', ' ').title()}")
-            st.metric("Confianza", f"{confianza * 100:.1f}%")
+        with col_modelo2:
+            st.subheader("🟢 Modelo 2 (7 especies)")
+            with st.spinner("Analizando con Modelo 2..."):
+                resultado_2 = _predecir("/predict/especie2", uploaded)
+            if resultado_2:
+                _mostrar_resultado(resultado_2)
 
-            if protegida:
-                st.error("🚨 **ALERTA — Especie protegida.** Devolver al mar inmediatamente. Está prohibida su captura.")
+        # Resumen rápido de la comparación, para que salte a la vista
+        # si ambos modelos coincidieron o no en la misma imagen.
+        if resultado_1 and resultado_2:
+            st.markdown("---")
+            especie_1 = resultado_1["especie"].replace("_", " ").title()
+            especie_2 = resultado_2["especie"].replace("_", " ").title()
+            if resultado_1["especie"].lower() == resultado_2["especie"].lower():
+                st.success(f"✅ Ambos modelos coinciden: **{especie_1}**")
             else:
-                st.info("✅ Especie no protegida. Verificar talla mínima y veda.")
-
-            st.markdown("**Probabilidades por clase:**")
-            df_probs = pd.DataFrame({
-                "Especie": list(todas.keys()),
-                "Probabilidad": list(todas.values()),
-            }).sort_values("Probabilidad", ascending=False)
-            st.bar_chart(df_probs.set_index("Especie"))
+                st.warning(
+                    f"⚠️ Los modelos NO coinciden — Modelo 1 dice **{especie_1}**, "
+                    f"Modelo 2 dice **{especie_2}**."
+                )
 
 # ===================== TAB 2: RNN Pronóstico =====================
 with tab2:
@@ -203,5 +234,5 @@ with tab3:
         "**Equipo:** Marco Álvarez Quirós · Sharon Obando Gómez · Fabián Brenes Loría · Johel Barquero Carvajal ·"
         "**Profesor:** Osvaldo González Chaves · "
         "**Curso:** Inteligencia Artificial 2026  ·  "
-        "**Entrega:** 13 de julio 2026 ·"
+        "**Entrega:** 20 de julio 2026 ·"
     )
